@@ -11,6 +11,7 @@ import debounce from "lodash.debounce";
 import { ResultNode } from "./obsidian-plugin-model";
 import React from "react";
 import { Token } from "markdown-it";
+import { reverseMarkdownParsing } from "./copy";
 
 export interface Preferences {
   socketPath: string;
@@ -173,7 +174,7 @@ function AdvancedUriAction(props: { item: ResultNode; vault: string }) {
       />
       <Action.CopyToClipboard
         title="Copy to clipboard"
-        content={item.value}
+        content={reverseMarkdownParsing(item.attrs.tokens)}
         shortcut={{ modifiers: ["cmd"], key: "c" }}
         icon={Icon.Clipboard}
       />
@@ -189,8 +190,8 @@ function getMarkdownUri(
 }
 
 function getUrl(item: ResultNode["attrs"]["location"], vault: string): string {
-  const uri = `vault=${vault}&filepath=${item.path}&line=${item.position.start.line + 1}&column=${item.position.start.ch + 1}`;
-  return `obsidian://adv-uri?${encodeURI(uri)}`;
+  const uri = `vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
+  return `obsidian://tree-search-uri?${encodeURI(uri)}`;
 }
 
 function RaycastTokenRenderer(
