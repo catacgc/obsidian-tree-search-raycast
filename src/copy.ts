@@ -12,9 +12,6 @@ export function reverseMarkdownParsing(
     }
   
     if (token.type == "obsidian_link") {
-      let fileName = token.content.split("|")[0];
-      fileName = fileName.split("#")[0];
-  
       return token.content + reverseMarkdownParsing(tokens.slice(1))
     }
   

@@ -1,14 +1,13 @@
 import { Token } from "markdown-it";
 
-export type IndexedResult = { nodes: ResultNode[]; total: number };
-
-export type ResultNode = {
-  index: number;
-  value: string;
-  attrs: NodeAttributes;
-  children: ResultNode[];
-  parents: string[];
-};
+export type TreeNode = {
+  attrs: NodeAttributes,
+  indent: number,
+  hasChildren: boolean
+  visible: boolean
+  selected: boolean
+  index: number
+}
 
 export type NodeAttributes = {
   location: Location;

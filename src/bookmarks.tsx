@@ -8,7 +8,7 @@ import {
 import { ReactNode, useEffect, useState } from "react";
 import { searchBookmarks, VaultResults } from "./fetch";
 import debounce from "lodash.debounce";
-import { ResultNode } from "./obsidian-plugin-model";
+import { TreeNode } from "./obsidian-plugin-model";
 import React from "react";
 import { Token } from "markdown-it";
 import { reverseMarkdownParsing } from "./copy";
@@ -18,7 +18,7 @@ export interface Preferences {
 }
 
 type TreeNodeSearchProps = {
-  node: ResultNode;
+  node: TreeNode;
   vault: string;
   vaultColor: string;
   level: number;
@@ -45,7 +45,7 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
     <AdvancedUriAction item={item} vault={props.vault} />,
   ); // default open action
 
-  function getIcon(item: ResultNode) {
+  function getIcon(item: TreeNode) {
     if (
       item.attrs.nodeType == "page" ||
       item.attrs.nodeType == "virtual-page"
@@ -69,43 +69,25 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
 
   return (
     <List.Item
-      key={item.value}
+      key={item.index}
       title={`${props.level > 0 ? "|" : ""}${"–".repeat(props.level)} ${tokenText}`}
       accessories={[
         { icon: getIcon(item), tooltip: item.attrs.nodeType },
         { text: props.vaultColor, tooltip: props.vault },
       ]}
-      detail={
-        <List.Item.Detail
-          markdown={`
-**${item.value}**
-    
-- url: ${item.value}
-- src: ${getMarkdownUri(item.attrs.location, props.vault)}
-- tag: ${item.attrs.tags}
-    `}
-        />
-      }
+//       detail={
+//         <List.Item.Detail
+//           markdown={`
+// **${item.value}**
+//
+// - url: ${item.value}
+// - src: ${getMarkdownUri(item.attrs.location, props.vault)}
+// - tag: ${item.attrs.tags}
+//     `}
+//         />
+//       }
       actions={<ActionPanel>{...actionsAccumulator}</ActionPanel>}
     />
-  );
-};
-
-export const RaycastTreeList = (props: TreeNodeSearchProps) => {
-  return (
-    <>
-      <IndividualListItem key={props.node.index} {...props} />
-      {props.node.children.map((child, idx) => (
-        <RaycastTreeList
-          key={`ct${idx}`}
-          node={child}
-          level={props.level + 1}
-          vault={props.vault}
-          vaultColor={props.vaultColor}
-          minExpand={props.minExpand}
-        />
-      ))}
-    </>
   );
 };
 
@@ -143,9 +125,10 @@ export default function Command() {
       onSearchTextChange={setSearchText}
       isShowingDetail={false}
     >
-      {filtered.flatMap((vault) =>
-        vault.results.nodes.map((item, idx) => (
-          <RaycastTreeList
+      {filtered.filter(vault => vault.error).map(vault => <List.Item key={vault.vault} title={vault.error || ""} />)}
+      {filtered.filter(vault => vault && !vault.error).flatMap((vault) =>
+        vault.results.map((item, idx) => (
+          <IndividualListItem
             key={`t${vault.vault}${idx}`}
             vaultColor={getVaultColor(
               vault.vault,
@@ -153,7 +136,7 @@ export default function Command() {
             )}
             vault={vault.vault}
             node={item}
-            level={0}
+            level={item.indent}
             minExpand={5}
           />
         )),
@@ -162,7 +145,7 @@ export default function Command() {
   );
 }
 
-function AdvancedUriAction(props: { item: ResultNode; vault: string }) {
+function AdvancedUriAction(props: { item: TreeNode; vault: string }) {
   const item = props.item;
   return (
     <>
@@ -172,25 +155,30 @@ function AdvancedUriAction(props: { item: ResultNode; vault: string }) {
         shortcut={{ modifiers: ["shift"], key: "enter" }}
         icon={Icon.Pencil}
       />
+      <Action.OpenInBrowser
+        title="Insert After"
+        url={getInsertUrl(item.attrs.location, props.vault)}
+        shortcut={{ modifiers: ["ctrl"], key: "i" }}
+        icon={Icon.Pencil}
+      />
+
       <Action.CopyToClipboard
         title="Copy to clipboard"
         content={reverseMarkdownParsing(item.attrs.tokens)}
-        shortcut={{ modifiers: ["cmd"], key: "c" }}
+        shortcut={{ modifiers: ["ctrl"], key: "c" }}
         icon={Icon.Clipboard}
       />
     </>
   );
 }
 
-function getMarkdownUri(
-  location: ResultNode["attrs"]["location"],
-  vault: string,
-) {
-  return `[${location.path}](${getUrl(location, vault)})`;
+function getInsertUrl(item: TreeNode["attrs"]["location"], vault: string): string {
+  const uri = `raycastaction=insert&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
+  return `obsidian://tree-search-uri?${encodeURI(uri)}`;
 }
 
-function getUrl(item: ResultNode["attrs"]["location"], vault: string): string {
-  const uri = `vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
+function getUrl(item: TreeNode["attrs"]["location"], vault: string): string {
+  const uri = `raycastaction=open&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
   return `obsidian://tree-search-uri?${encodeURI(uri)}`;
 }
 
