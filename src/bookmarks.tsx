@@ -8,7 +8,7 @@ import {
 import { ReactNode, useEffect, useState } from "react";
 import { searchBookmarks, VaultResults } from "./fetch";
 import debounce from "lodash.debounce";
-import { TreeNode } from "./obsidian-plugin-model";
+import { ParsedNode, TreeNode } from "./obsidian-plugin-model";
 import React from "react";
 import { Token } from "markdown-it";
 import { reverseMarkdownParsing } from "./copy";
@@ -37,9 +37,10 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
   const item = props.node;
   const actionsAccumulator: ReactNode[] = [];
   const tokenText = RaycastTokenRenderer(
-    item.attrs.tokens,
+    [],
     actionsAccumulator,
     props.vault,
+    item.node
   );
   actionsAccumulator.push(
     <AdvancedUriAction item={item} vault={props.vault} />,
@@ -47,20 +48,18 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
 
   function getIcon(item: TreeNode) {
     if (
-      item.attrs.nodeType == "page" ||
-      item.attrs.nodeType == "virtual-page"
+      item.node.nodeType == "page"
     ) {
       return Icon.Document;
     }
 
     if (
-      item.attrs.nodeType == "task" ||
-      item.attrs.nodeType == "completed-task"
+      item.node.nodeType == "text" && item.node.isTask
     ) {
       return Icon.Checkmark;
     }
 
-    if (item.attrs.nodeType == "header") {
+    if (item.node.nodeType == "header") {
       return Icon.Hashtag;
     }
 
@@ -72,7 +71,7 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
       key={item.index}
       title={`${props.level > 0 ? "|" : ""}${"–".repeat(props.level)} ${tokenText}`}
       accessories={[
-        { icon: getIcon(item), tooltip: item.attrs.nodeType },
+        { icon: getIcon(item), tooltip: item.node.nodeType },
         { text: props.vaultColor, tooltip: props.vault },
       ]}
 //       detail={
@@ -151,20 +150,20 @@ function AdvancedUriAction(props: { item: TreeNode; vault: string }) {
     <>
       <Action.OpenInBrowser
         title="See in Obsidian"
-        url={getUrl(item.attrs.location, props.vault)}
+        url={getUrl(item.node.location, props.vault)}
         shortcut={{ modifiers: ["shift"], key: "enter" }}
         icon={Icon.Pencil}
       />
       <Action.OpenInBrowser
         title="Insert After"
-        url={getInsertUrl(item.attrs.location, props.vault)}
+        url={getInsertUrl(item.node.location, props.vault)}
         shortcut={{ modifiers: ["ctrl"], key: "i" }}
         icon={Icon.Pencil}
       />
 
       <Action.CopyToClipboard
         title="Copy to clipboard"
-        content={reverseMarkdownParsing(item.attrs.tokens)}
+        content={reverseMarkdownParsing(item.node)}
         shortcut={{ modifiers: ["ctrl"], key: "c" }}
         icon={Icon.Clipboard}
       />
@@ -172,12 +171,12 @@ function AdvancedUriAction(props: { item: TreeNode; vault: string }) {
   );
 }
 
-function getInsertUrl(item: TreeNode["attrs"]["location"], vault: string): string {
+function getInsertUrl(item: TreeNode["node"]["location"], vault: string): string {
   const uri = `raycastaction=insert&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
   return `obsidian://tree-search-uri?${encodeURI(uri)}`;
 }
 
-function getUrl(item: TreeNode["attrs"]["location"], vault: string): string {
+function getUrl(item: TreeNode["node"]["location"], vault: string): string {
   const uri = `raycastaction=open&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
   return `obsidian://tree-search-uri?${encodeURI(uri)}`;
 }
@@ -186,7 +185,18 @@ function RaycastTokenRenderer(
   tokens: Token[],
   actions: ReactNode[],
   vault: string,
+  node?: ParsedNode,
 ): string {
+
+  switch(node?.nodeType) {
+    case "text":
+      return RaycastTokenRenderer(node.tokens, actions, vault);
+    case "header":
+      return `${node.page} > ${node.header}`;
+    case "page":
+      return `${node.page}`;
+  }
+
   if (tokens.length == 0) return "";
 
   const token = tokens[0];

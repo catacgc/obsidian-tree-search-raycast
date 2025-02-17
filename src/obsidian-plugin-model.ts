@@ -1,7 +1,7 @@
 import { Token } from "markdown-it";
 
 export type TreeNode = {
-  attrs: NodeAttributes,
+  node: ParsedNode,
   indent: number,
   hasChildren: boolean
   visible: boolean
@@ -9,20 +9,35 @@ export type TreeNode = {
   index: number
 }
 
-export type NodeAttributes = {
-  location: Location;
-  tokens: Token[];
-  tags: string[];
-  aliases: string[];
-  searchKey: string;
-  nodeType:
-    | "page"
-    | "text"
-    | "task"
-    | "completed-task"
-    | "virtual-page"
-    | "header";
-};
+export type BaseNode = {
+	searchKey: string,
+	location: Location,
+}
+
+export type PageNode = BaseNode & {
+	nodeType: "page",
+	isReference: boolean,
+	page: string,
+	aliases: string[],
+	tags: string[],
+}
+
+export type TextNode = BaseNode & {
+	nodeType: "text",
+	tokens: Token[],
+	tags: string[],
+	isTask: boolean,
+	isCompleted: boolean,
+}
+
+export type HeaderNode = BaseNode & {
+	nodeType: "header",
+	page: string,
+	header: string,
+	isReference: boolean
+}
+
+export type ParsedNode = BaseNode & (PageNode | TextNode | HeaderNode)
 
 export type Location = {
   path: string;
