@@ -1,19 +1,11 @@
 import axios from "axios";
 import { Preferences } from "./bookmarks";
-import { TreeNode } from "./obsidian-plugin-model";
-
-export interface VaultResults {
-  vault: string;
-  results: TreeNode[];
-  error?: string;
-}
-
-
+import { VaultResults } from "./obsidian-plugin-model";
 
 export async function fetchData(
   query: string,
   socketPath: string,
-): Promise<{ data: TreeNode[] }> {
+): Promise<{ data: VaultResults }> {
   const http = axios.create({
     socketPath: socketPath,
     baseURL: `http://localhost`,
@@ -55,11 +47,8 @@ async function getVaultResults(
   it: { socket: string; vault: string },
 ): Promise<VaultResults> {
   try {
-    const data = await fetchData(query, it.socket);
-    return {
-      vault: it.vault,
-      results: data.data,
-    };
+    const res = await fetchData(query, it.socket);
+    return res.data;
   } catch (error) {
     console.error(`Error getting results for vault ${it.vault}:`, error);
     return {

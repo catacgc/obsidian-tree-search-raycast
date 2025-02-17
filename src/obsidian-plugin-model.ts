@@ -1,41 +1,31 @@
-import { Token } from "markdown-it";
-
-export type TreeNode = {
-  attrs: NodeAttributes,
-  indent: number,
-  hasChildren: boolean
-  visible: boolean
-  selected: boolean
-  index: number
+export interface VaultResults {
+  vault: string;
+  results: IndividualListItemModel[];
+  error?: string;
 }
 
-export type NodeAttributes = {
-  location: Location;
-  tokens: Token[];
-  tags: string[];
-  aliases: string[];
-  searchKey: string;
-  nodeType:
-    | "page"
-    | "text"
-    | "task"
-    | "completed-task"
-    | "virtual-page"
-    | "header";
-};
+export interface IndividualListItemModel {
+  title: string,
+  level: number,
+  index: number,
+  nodeType: string,
+  actions: RaycastAction[]
+}
 
-export type Location = {
-  path: string;
-  position: {
-    start: {
-      line: number;
-      ch: number;
-    };
-    end: {
-      line: number;
-      ch: number;
-    };
-  };
-};
+export type RaycastAction = Copy | Browse
 
-export default {};
+export type BaseAction = {
+  icon: string
+  title: string
+  shortcut?: { modifiers: string[], key: string }
+}
+
+export interface Copy extends BaseAction {
+  type: "copy"
+  text: string
+}
+
+export interface Browse extends BaseAction {
+  type: "browse"
+  url: string
+}

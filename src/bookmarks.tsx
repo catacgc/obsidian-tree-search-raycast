@@ -6,19 +6,16 @@ import {
   List,
 } from "@raycast/api";
 import { ReactNode, useEffect, useState } from "react";
-import { searchBookmarks, VaultResults } from "./fetch";
+import { searchBookmarks } from "./fetch";
 import debounce from "lodash.debounce";
-import { TreeNode } from "./obsidian-plugin-model";
-import React from "react";
-import { Token } from "markdown-it";
-import { reverseMarkdownParsing } from "./copy";
+import { IndividualListItemModel, RaycastAction, VaultResults } from "./obsidian-plugin-model";
 
 export interface Preferences {
   socketPath: string;
 }
 
 type TreeNodeSearchProps = {
-  node: TreeNode;
+  node: IndividualListItemModel;
   vault: string;
   vaultColor: string;
   level: number;
@@ -35,33 +32,18 @@ function getVaultColor(vault: string, vaults: string[]): string {
 
 export const IndividualListItem = (props: TreeNodeSearchProps) => {
   const item = props.node;
-  const actionsAccumulator: ReactNode[] = [];
-  const tokenText = RaycastTokenRenderer(
-    item.attrs.tokens,
-    actionsAccumulator,
-    props.vault,
-  );
-  actionsAccumulator.push(
-    <AdvancedUriAction item={item} vault={props.vault} />,
-  ); // default open action
+  const actionsAccumulator: ReactNode[] = item.actions.map(action => <AdvancedUriAction action={action} />);
+  const tokenText = item.title;
 
-  function getIcon(item: TreeNode) {
-    if (
-      item.attrs.nodeType == "page" ||
-      item.attrs.nodeType == "virtual-page"
-    ) {
-      return Icon.Document;
-    }
+  function getIcon(item: IndividualListItemModel) {
 
-    if (
-      item.attrs.nodeType == "task" ||
-      item.attrs.nodeType == "completed-task"
-    ) {
-      return Icon.Checkmark;
-    }
-
-    if (item.attrs.nodeType == "header") {
-      return Icon.Hashtag;
+    switch(item.nodeType) {
+      case "page":
+        return Icon.Document;
+      case "text":
+        return Icon.Text;
+      case "header":
+        return Icon.Hashtag;
     }
 
     return Icon.Text;
@@ -72,20 +54,9 @@ export const IndividualListItem = (props: TreeNodeSearchProps) => {
       key={item.index}
       title={`${props.level > 0 ? "|" : ""}${"–".repeat(props.level)} ${tokenText}`}
       accessories={[
-        { icon: getIcon(item), tooltip: item.attrs.nodeType },
+        { icon: getIcon(item), tooltip: item.nodeType },
         { text: props.vaultColor, tooltip: props.vault },
       ]}
-//       detail={
-//         <List.Item.Detail
-//           markdown={`
-// **${item.value}**
-//
-// - url: ${item.value}
-// - src: ${getMarkdownUri(item.attrs.location, props.vault)}
-// - tag: ${item.attrs.tags}
-//     `}
-//         />
-//       }
       actions={<ActionPanel>{...actionsAccumulator}</ActionPanel>}
     />
   );
@@ -136,7 +107,7 @@ export default function Command() {
             )}
             vault={vault.vault}
             node={item}
-            level={item.indent}
+            level={item.level}
             minExpand={5}
           />
         )),
@@ -145,164 +116,18 @@ export default function Command() {
   );
 }
 
-function AdvancedUriAction(props: { item: TreeNode; vault: string }) {
-  const item = props.item;
-  return (
-    <>
-      <Action.OpenInBrowser
-        title="See in Obsidian"
-        url={getUrl(item.attrs.location, props.vault)}
-        shortcut={{ modifiers: ["shift"], key: "enter" }}
-        icon={Icon.Pencil}
+function AdvancedUriAction(props: { action: RaycastAction }) {
+  switch(props.action.type) {
+    case "browse":
+      return <Action.OpenInBrowser title={props.action.title} 
+      url={props.action.url}
+      shortcut={props.action.shortcut as any}
       />
-      <Action.OpenInBrowser
-        title="Insert After"
-        url={getInsertUrl(item.attrs.location, props.vault)}
-        shortcut={{ modifiers: ["ctrl"], key: "i" }}
-        icon={Icon.Pencil}
+    case "copy":
+      return <Action.CopyToClipboard 
+      title={props.action.title} 
+      content={props.action.text} 
+      shortcut={props.action.shortcut as any}
       />
-
-      <Action.CopyToClipboard
-        title="Copy to clipboard"
-        content={reverseMarkdownParsing(item.attrs.tokens)}
-        shortcut={{ modifiers: ["ctrl"], key: "c" }}
-        icon={Icon.Clipboard}
-      />
-    </>
-  );
-}
-
-function getInsertUrl(item: TreeNode["attrs"]["location"], vault: string): string {
-  const uri = `raycastaction=insert&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
-  return `obsidian://tree-search-uri?${encodeURI(uri)}`;
-}
-
-function getUrl(item: TreeNode["attrs"]["location"], vault: string): string {
-  const uri = `raycastaction=open&vault=${vault}&filepath=${item.path}&sl=${item.position.start.line}&sc=${item.position.start.ch}&el=${item.position.end.line}&ec=${item.position.end.ch}`;
-  return `obsidian://tree-search-uri?${encodeURI(uri)}`;
-}
-
-function RaycastTokenRenderer(
-  tokens: Token[],
-  actions: ReactNode[],
-  vault: string,
-): string {
-  if (tokens.length == 0) return "";
-
-  const token = tokens[0];
-
-  if (token.type == "inline" && token.children) {
-    return RaycastTokenRenderer(token.children, actions, vault);
   }
-
-  if (token.type == "obsidian_link") {
-    let fileName = token.content.split("|")[0];
-    fileName = fileName.split("#")[0];
-
-    actions.push(
-      <Action.OpenInBrowser
-        title={`Open 🔹${token.content}`}
-        url={`obsidian://open?vault=${vault}&file=${fileName}`}
-      />,
-    );
-
-    return (
-      "🔹" +
-      token.content +
-      RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "link_open") {
-    const href = decodeURI(token.attrs?.[0]?.[1] || "#");
-    const content = tokens[1]?.content;
-
-    actions.push(
-      <Action.OpenInBrowser title={`Browse 🔗${content}`} url={href} />,
-    );
-
-    return (
-      "🔗 " + content + RaycastTokenRenderer(tokens.slice(2), actions, vault)
-    );
-  }
-
-  if (token.type == "link_close") {
-    return RaycastTokenRenderer(tokens.slice(1), actions, vault);
-  }
-
-  if (token.type == "text") {
-    if (token.content.trim().startsWith("http")) {
-      actions.push(
-        <Action.OpenInBrowser
-          title={`Browse 🔗${token.content}`}
-          url={token.content.trim()}
-        />,
-      );
-
-      return (
-        "🔗 " +
-        token.content +
-        RaycastTokenRenderer(tokens.slice(1), actions, vault)
-      );
-    }
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "strong_open") {
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "strong_close") {
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "em_open") {
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "softbreak") {
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "s_open") {
-    return (
-      token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "image") {
-    return (
-      "🖼️ " +
-      token.content +
-      RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  if (token.type == "code_inline") {
-    actions.push(
-      <Action.CopyToClipboard
-        title={`Copy ${token.content} to clipboard`}
-        content={token.content}
-      />,
-    );
-    return (
-      "📋 " +
-      token.content +
-      RaycastTokenRenderer(tokens.slice(1), actions, vault)
-    );
-  }
-
-  // if (!token.type.includes("_close")) console.log("tokens not rendered: ", tokens)
-
-  return token.content + RaycastTokenRenderer(tokens.slice(1), actions, vault);
 }
